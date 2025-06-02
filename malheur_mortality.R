@@ -17,6 +17,7 @@ rm(list=ls())
 
 #Load libraries needed for this section of code
 library(tidyverse)
+library(broom)
 
 #Load focal tree data
 focal_trees <- read.csv("focal_trees.csv")
@@ -69,6 +70,81 @@ sizes <- focal_trees %>%
             mean=mean(dbh_cm, na.rm = TRUE)) %>%
   arrange(mean)
 sizes
+
+#Graph age~species
+#Define species names and colors
+species_names <- c(
+  "PICO" = "Lodgepole",
+  "JUOC" = "Juniper",
+  "LAOC" = "Larch",
+  "PSME" = "Douglas-fir",
+  "ABGR" = "Grand fir",
+  "PIPO" = "Ponderosa"
+)
+species_colors <- c(
+  "Lodgepole" = "gray44",
+  "Juniper" = "cadetblue",
+  "Larch" = "yellow3",
+  "Douglas-fir" = "darkolivegreen3",
+  "Grand fir" = "darkgreen",
+  "Ponderosa" = "chocolate"
+)
+
+#Filter and relabel species
+plot_data <- focal_trees %>%
+  filter(!is.na(age), !is.na(dbh_cm), spp %in% names(species_names)) %>%
+  mutate(species = factor(species_names[spp], levels = species_names))
+
+#Fit regression models by species
+reg_results <- plot_data %>%
+  group_by(species) %>%
+  nest() %>%
+  mutate(
+    model = map(data, ~ lm(dbh_cm ~ age, data = .x)),
+    coefs = map(model, coef),
+    stats = map(model, glance),
+    label = map2_chr(coefs, stats, ~ {
+      intercept <- round(.x[1], 1)
+      slope <- round(.x[2], 3)
+      r2 <- round(.y$r.squared, 2)
+      glue::glue("y = {intercept} + {slope}x\nR² = {r2}")
+    }),
+    label_x = 25,
+    label_y = 165
+  ) %>%
+  select(species, label, label_x, label_y)
+
+#Merge label data back into main plot data
+plot_data_labeled <- left_join(plot_data, reg_results, by = "species")
+
+#Plot age - species relationship
+age_dbh_plot <- ggplot(plot_data_labeled, aes(x = age, y = dbh_cm, color = species)) +
+  geom_point(alpha = 0.6, size = 1.25) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1.1) +
+  geom_text(aes(x = label_x, y = label_y, label = label), 
+            hjust = 0, vjust = 1, size = 3.5, family = "Helvetica", color = "black") +
+  facet_wrap(~ species, scales = "fixed") +
+  scale_color_manual(values = species_colors, name = "") +
+  scale_x_continuous("Age (years)", expand = expansion(mult = c(0.05, 0.05))) +
+  scale_y_continuous("DBH (cm)", limits = c(0, 175), breaks = c(50, 100, 150)) +
+  theme_bw(base_size = 14, base_family = "Helvetica") +
+  theme(
+    panel.border = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(size = 12, face = "plain"),
+    legend.position = "bottom",
+    plot.title = element_blank(),
+    plot.subtitle = element_blank()
+  )
+ggsave(
+  filename = "age_dbh_plot.png",
+  plot = age_dbh_plot,
+  path = "/Users/james/Desktop",
+  width = 9,
+  height = 6.5,
+  units = "in",
+  dpi = 600
+)
 
 #Calculate mortality by site
 mortality_summary1 <- focal_trees %>%
@@ -153,7 +229,7 @@ site_mortality <- ggplot(status_site, aes(x = age_class, y = prop, fill = status
     axis.ticks.y = element_blank()
   )
 #site_mortality
-ggsave(path = "~Desktop", filename = "site_mortality.png", width = 2, height = 6.85, units = "in", dpi = 500)
+ggsave(path = "/Users/james/Desktop", filename = "site_mortality.png", width = 2, height = 6.85, units = "in", dpi = 500)
 
 
 ##########################################
@@ -226,7 +302,7 @@ require(grid)   # for the textGrob() function
 quartz(width=7.5, height=7)
 age_structure_plot <- ggarrange(all_age_structure + rremove("ylab") + rremove("xlab"), sub_age_structure + rremove("ylab") + rremove("xlab"), heights = c(1, 1), ncol = 1, nrow = 2, align = "v") 
 annotate_figure(age_structure_plot, left = textGrob("Tree counts", rot = 90, vjust = 1, gp = gpar(cex = 1.3)), bottom = textGrob("Age (years)", gp = gpar(cex = 1.3)))
-ggsave(path="~Desktop", "age_structure_plot.png", width = 7.5, height = 7, units = "in", dpi=600)
+ggsave(path="/Users/james/Desktop", "age_structure_plot.png", width = 7.5, height = 7, units = "in", dpi=600)
 
 
 #########################################
@@ -686,7 +762,7 @@ status_species_plot <- ggplot(status_species, aes(
     axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
     legend.position = "right"
   )
-ggsave("~Desktop/status_species_plot.png", status_species_plot, width = 7, height = 4, units = "in", dpi = 500)
+ggsave("/Users/james/Desktop/status_species_plot.png", status_species_plot, width = 7, height = 4, units = "in", dpi = 500)
 
 #Age class barplot
 status_age_plot <- ggplot(status_age, aes(
@@ -717,7 +793,7 @@ status_age_plot <- ggplot(status_age, aes(
     axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
     legend.position = "right"
   )
-ggsave("~Desktop/status_age_plot.png", status_age_plot, width = 7, height = 4, units = "in", dpi = 500)
+ggsave("/Users/james/Desktop/status_age_plot.png", status_age_plot, width = 7, height = 4, units = "in", dpi = 500)
 
 
 ##################################################
@@ -1166,7 +1242,7 @@ unburned_vi_plot <- unburned_vi %>%
   theme(plot.title = element_text(hjust = 0.5, size=14)) +
   theme(legend.position="none", plot.margin=unit(c(.2,1,.2,1),"cm")) 
 #unburned_vi_plot
-#ggsave(path="~Desktop", "vi_plot.png", width = 6, height = 8, units = "in", dpi=500)
+#ggsave(path="/Users/james/Desktop", "vi_plot.png", width = 6, height = 8, units = "in", dpi=500)
 
 #Extract the confusion matrix values as data.frame
 unburned_cm_d <- as.data.frame(unburned_confusion$table)
@@ -1312,7 +1388,7 @@ burned_vi_confusion <- ggdraw() +
 #Combine the two final graphics
 final_rf_model_graphic <- ggpubr::ggarrange(unburned_vi_confusion, burned_vi_confusion, ncol = 2, nrow = 1)
 #final_rf_model_graphic
-ggsave(path="~Desktop", "final_rf_model_graphic.png", width = 9.15, height = 7, units = "in", dpi=500)
+ggsave(path="/Users/james/Desktop", "final_rf_model_graphic.png", width = 9.15, height = 7, units = "in", dpi=500)
 
 
 ## Partial dependence plots
@@ -1366,7 +1442,7 @@ main_plot <- row1 / row2 / row3 / row4 / row5 +
   plot_layout(ncol = 1)
 
 #Save
-png("~Desktop/partial_dependence_final_ultratight.png", width = 3.72, height = 6.75, units = "in", res = 600)
+png("/Users/james/Desktop/partial_dependence_final_ultratight.png", width = 3.72, height = 6.75, units = "in", res = 600)
 grid.newpage()
 pushViewport(viewport(layout = grid.layout(1, 2, widths = unit(c(0.035, 0.965), "npc"))))
 grid.text("Probability of tree mortality", x = unit(0.021, "npc"), rot = 90, gp = gpar(fontsize = 12, fontfamily = "Arial"))
@@ -1392,18 +1468,6 @@ z.facet.range<-cut(z.facet.center, 100)
 quartz(h=7, w=12)
 unburned_bai_age_persp <- persp(x = unburned_bai_age_dens$x, y = unburned_bai_age_dens$y, z = unburned_bai_age_dens$z, theta=45, phi=25, ticktype="detailed", xlab="\nBAI (scaled)", ylab="\nTree age (years)", zlab="\nProb. Mortality", expand=2/3, shade=0.25, cex.lab=1.35, cex.axis=1.25, col=colors[z.facet.range])
 unburned_bai_age_persp
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ########################################
@@ -2092,7 +2156,7 @@ quartz(width=7, height=8)
 figure <- ggarrange(old_comp_graph + rremove("ylab"), very_old_comp_graph + rremove("ylab"), heights = c(1, 1), ncol = 1, nrow = 2, align = "v", common.legend = TRUE, legend="bottom")
 #Annotate the figure by adding a y-axis common label
 annotate_figure(figure, left = text_grob("Proportion reference (Decade 0) tree counts", size = 13, family="Arial", rot = 90, vjust = .25, hjust = .315))
-#ggsave(path="~Desktop", "combine_graphs.png", width = 7, height = 8, units = "in", dpi=500)
+#ggsave(path="/Users/james/Desktop", "combine_graphs.png", width = 7, height = 8, units = "in", dpi=500)
 
 
 ###########################################
